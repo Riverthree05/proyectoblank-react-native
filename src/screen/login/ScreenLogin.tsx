@@ -1,25 +1,71 @@
-import { StyleSheet, Text, View, TextInput, Button, Alert } from 'react-native'
-import React, { useState } from 'react'
-import { useNavigation } from '@react-navigation/native'
+import { StyleSheet, Text, View, TextInput, Alert, ActivityIndicator, TouchableOpacity } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { useNavigation, useRoute, ParamListBase } from '@react-navigation/native'
+import { StackNavigationProp } from '@react-navigation/stack';
+import { loginUser, handleApiError } from '../../utils/api';
+import { useAuth } from '../../../Navegacion';
 
-export default function ScreenLogin({ setIsLoggedIn }) {
+// Definir tipos para los parámetros de navegación
+type AuthStackParamList = {
+  ScreenLogin: { registeredEmail?: string; registeredPassword?: string };
+  ScreenCrearCuenta: undefined;
+};
+
+type ScreenLoginNavigationProp = StackNavigationProp<AuthStackParamList, 'ScreenLogin'>;
+
+export default function ScreenLogin() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const navigation = useNavigation();
+  const [pw, setpw] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation<ScreenLoginNavigationProp>();
+  const route = useRoute();
+  const { setIsLoggedIn } = useAuth();
+  
+  // Manejar parámetros de navegación de forma segura
+  useEffect(() => {
+    const params = route.params as { registeredEmail?: string, registeredPassword?: string } | undefined;
+    
+    if (params?.registeredEmail) {
+      setEmail(params.registeredEmail);
+    }
+    
+    if (params?.registeredPassword) {
+      setpw(params.registeredPassword);
+    }
+  }, [route.params]);
 
-  const handleLogin = () => {
-    if (email === '' || password === '') {
-      Alert.alert('Error', 'Por favor ingresa email y contraseña');
+  const onLogin = async () => {
+    if (email === '' || pw === '') {
+      Alert.alert('Error', 'Por favor, complete todos los campos.');
       return;
     }
-    // Usuario y contraseña estáticos para pruebas
-    if (email !== 'usuario@gmail.com' || password !== '123456') {
-      Alert.alert('Error', 'Usuario o contraseña incorrectos');
-      return;
+    
+    setLoading(true);
+    
+    try {
+      console.log('Intentando login con:', { email });
+      
+      const result = await loginUser({
+        email: email,
+        pw: pw
+      });
+      
+      console.log('Respuesta login:', result);
+      
+      if (result && result.status) {
+        setIsLoggedIn(true);
+        console.log('Login exitoso');
+      } else {
+        const errorMsg = result?.mensaje || 'Credenciales incorrectas';
+        console.error('Error login:', errorMsg);
+        Alert.alert('Error', errorMsg);
+      }
+    } catch (error) {
+      handleApiError(error, 'inicio de sesión');
+    } finally {
+      setLoading(false);
     }
-    setIsLoggedIn(true); // Cambia a la pantalla principal
   };
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Iniciar Sesión</Text>
@@ -35,17 +81,30 @@ export default function ScreenLogin({ setIsLoggedIn }) {
       <TextInput
         style={styles.input}
         placeholder="Contraseña"
-        value={password}
-        onChangeText={setPassword}
+        value={pw}
+        onChangeText={setpw}
         secureTextEntry
         placeholderTextColor="#888"
       />
-      <View style={styles.buttonContainer}>
-        <Button title="Ingresar" onPress={handleLogin} color="#1976D2" />
-      </View>
-      <View style={styles.buttonContainer}>
-        <Button title="Crear cuenta" onPress={() => (navigation as any).navigate('ScreenCrearCuenta')} color="#43A047" />
-      </View>
+      <TouchableOpacity 
+        style={[styles.button, loading && styles.buttonDisabled]} 
+        onPress={onLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Text style={styles.buttonText}>Ingresar</Text>
+        )}
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.buttonSecondary]}
+        onPress={() => navigation.navigate('ScreenCrearCuenta')}
+        disabled={loading}
+      >
+        <Text style={styles.buttonSecondaryText}>Crear cuenta</Text>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -77,15 +136,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: '#222',
   },
-  buttonContainer: {
+  button: {
     width: '100%',
-    marginBottom: 12,
+    height: 50,
+    backgroundColor: '#1976D2',
     borderRadius: 12,
-    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
     elevation: 2,
     shadowColor: '#1976D2',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
+  buttonDisabled: {
+    backgroundColor: '#bbdefb',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  buttonSecondary: {
+    width: '100%',
+    height: 50,
+    backgroundColor: 'transparent',
+    borderColor: '#43A047',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },  buttonSecondaryText: {
+    color: '#43A047',
+    fontSize: 18,
+    fontWeight: 'bold',
+  }
 })
